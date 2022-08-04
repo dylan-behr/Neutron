@@ -206,7 +206,7 @@ class Phase_sum():
                 endphaseindex = find_index(lines, '------------------------------------------------------------------------------', low = phaseindex+2)
             except ValueError:
                 endphaseindex = find_index(lines, ' ==> GLOBAL PARAMETERS FOR PATTERN', low = phaseindex+2)
-            cellindex = find_index(lines, ' => Direct cell parameters:', low = phaseindex, up = endphaseindex)
+            cellindex = find_index(lines, ' => Cell parameters:', low = phaseindex, up = endphaseindex)
 
             if atom:
                 # Find key indices for extraction of atomic params
