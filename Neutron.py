@@ -143,7 +143,7 @@ def extract_sum(path_to_file, phase, lattice = True, atom = False):
             endphaseindex = find_index(lines, '------------------------------------------------------------------------------', low = phaseindex+2)
         except ValueError:
             endphaseindex = find_index(lines, ' ==> GLOBAL PARAMETERS FOR PATTERN', low = phaseindex+2)
-        cellindex = find_index(lines, ' => Cell parameters:', low = phaseindex, up = endphaseindex)
+        cellindex = find_index(lines, ' => Cell parameters', low = phaseindex, up = endphaseindex)
 
         if atom:
             # Find key indices for extraction of atomic params
@@ -184,7 +184,8 @@ class Phase_sum():
     # lattice and atoms 
     def __init__(self, path_to_file, phase = 1, lattice = True, atom = False):
         self.lattice = self.extract_sum(path_to_file, phase, lattice = True, atom = False)
-        self.atoms = self.extract_sum(path_to_file, phase, lattice = False, atom = True)
+        if atom:
+            self.atoms = self.extract_sum(path_to_file, phase, lattice = False, atom = True)
 
     def extract_sum(self, path_to_file, phase, lattice = True, atom = False):
         '''
@@ -206,7 +207,7 @@ class Phase_sum():
                 endphaseindex = find_index(lines, '------------------------------------------------------------------------------', low = phaseindex+2)
             except ValueError:
                 endphaseindex = find_index(lines, ' ==> GLOBAL PARAMETERS FOR PATTERN', low = phaseindex+2)
-            cellindex = find_index(lines, ' => Cell parameters:', low = phaseindex, up = endphaseindex)
+            cellindex = find_index(lines, ' => Cell parameters', low = phaseindex, up = endphaseindex)
 
             if atom:
                 # Find key indices for extraction of atomic params
