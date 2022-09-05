@@ -4,6 +4,13 @@ import csv
 import pandas as pd
 from scipy.special import erfc, exp1
 from scipy.integrate import simps
+from math import log10, floor
+
+# Function for rounding to n decimal places
+round_to_n = lambda x, n: x if x == 0 else round(x, -int(floor(log10(abs(x)))) + (n - 1))
+
+# Function for finding (-ve) decimal exponent of value
+dp = lambda x: 0 if x in [0,0.0] else int(floor(-log10(x%1))+1)
 
 def roots(a,b,c):
     #a,b,c = np.asarray(a), np.asarray(b), np.asarray(c)
@@ -182,12 +189,14 @@ class Phase_sum():
     Object hosting unit cell and atomic parameters extracted from sum file using extract_sum() function
     '''
     # lattice and atoms 
-    def __init__(self, path_to_file, phase = 1, lattice = True, atom = False):
-        self.lattice = self.extract_sum(path_to_file, phase, lattice = True, atom = False)
+    def __init__(self, path_to_file, phase = 1, lattice = True, atom = False, magnet = False, spher = False):
+        self.lattice = self.extract_sum(path_to_file, phase, lattice = True, atom = False)[0]
         if atom:
-            self.atoms = self.extract_sum(path_to_file, phase, lattice = False, atom = True)
+            self.atoms = self.extract_sum(path_to_file, phase, lattice = False, atom = True)[0]
+        if magnet:
+            self.moments = self.extract_sum(path_to_file, phase, lattice = False, atom = False, magnet = True, spher = spher)[0]
 
-    def extract_sum(self, path_to_file, phase, lattice = True, atom = False):
+    def extract_sum(self, path_to_file, phase, lattice = True, atom = False, magnet = False, spher = False):
         '''
         Method to extract lattice parameters and optionally other phase data from .sum file
         Input:
@@ -198,6 +207,7 @@ class Phase_sum():
             latts (,ats): Lattice parameters (, and optionally frac. coords. + Other atom params) + uncertainties as row entries in 2D array; np.ndarray
         '''
         # Open .sum file
+        results = []
         with open(path_to_file, 'r') as data:
             lines = data.readlines()
             # Find key indices
@@ -227,19 +237,84 @@ class Phase_sum():
                     xyz, sxyz = np.array(xyz_ls[0::2]), np.array(xyz_ls[1::2] + [0])*np.array([1e-5,1e-5,1e-5,1e-3,1e-3,1])
                     # assign dictionary entry for atom to 2D array of params and uncertainties
                     ats[atname] = np.vstack((xyz, sxyz)).T
-                                
+            
+                results.append(ats)
+
+            if magnet:
+                # Find key indices for extraction of atomic params
+                magindex = find_index(lines, '  Name      Mom     sMo     Phi     sPhi     Tet     sTet     MPhas   sMPhas', phaseindex, cellindex)
+                endmagindex = find_index(lines, ' ==> ', magindex, cellindex) - 1
+                # Make dictionary for distinct atoms 
+                mags = {}
+                for magline, magnameline in zip(lines[magindex + 4 - spher:endmagindex:2],lines[magindex + 3:endmagindex:2]):
+                    # Extract names of atoms and extract atom parameters as string using regular expressions
+                    patmagname = re.compile(r'\b[A-Z].*?\b')
+                    # patmmm = re.compile(r'\d\.\d\d\d\(.\d\.\d\d\d\)    \d\.\d\d\d\(.\d\.\d\d\d\)    \d\.\d\d\d\(.\d\.\d\d\d\) ')
+                    patmmm = re.compile(r'\-?\d+\.\d\d\d\(.\d\.\d\d\d\)\s+\-?\d+\.\d\d\d\(.\d\.\d\d\d\)\s+\-?\d+\.\d\d\d\(.\d\.\d\d\d')
+                    [magname] = [magmatch.group(0) for magmatch in patmagname.finditer(magnameline)]
+                    [magmmm] = [magmatch.group(0) for magmatch in patmmm.finditer(magline)]
+                    # convert atom params to list of floats
+
+                    mmm_ls = [float(x) for x in re.split('\(|\)', magmmm)]
+                    # reorganise into arrays of atom params and uncertainties 
+                    mmm, smmm = np.array(mmm_ls[0::2]), np.array(mmm_ls[1::2])
+                    # assign dictionary entry for atom to 2D array of params and uncertainties
+                    mags[magname] = np.vstack((mmm, smmm)).T
+
+                results.append(mags)
+
         # Extract lattice params directly from key indices
         if lattice:
             latts = np.loadtxt(path_to_file, skiprows = cellindex+1, max_rows = 6)
 
-        if lattice and atom:
-            return latts, ats
-        elif lattice and not atom:
-            return latts
-        elif atom and not lattice:
-            return ats
-        else:
-            return
+            results.insert(0,latts)
+
+
+        return tuple(results)
+    
+    def a_tabulate(self):
+        '''
+        Method for printing latex-style table of atom parameters with values in scientific format
+        '''
+        ats = self.atoms
+        for atom in ats:
+            st = atom 
+            for (x,sx) in zip(ats[atom][:4,0],ats[atom][:4,1]):
+                if sx in [0,0.0]:
+                    sxround = ''
+                    decpl = len(str(x)) - 2
+                else:
+                    sxround =  '(' + str(round_to_n(sx,1))[-1] + ')'
+                    decpl = dp(sx)
+                xround = str(round(x,decpl))
+                if len(xround)-2 < dp(sx):
+                    xround += '0'*(dp(sx) - len(xround) + 2)
+
+                st +=  ' & ' + xround+ sxround
+
+            print(st  + r'\\')
+
+    def m_tabulate(self):
+        '''
+        Method for printing latex-style table of mag moment parameters with values in scientific format
+        '''
+        moms = self.moments
+        for mom in moms:
+            st = mom 
+            for (x,sx) in zip(moms[mom][:3,0],moms[mom][:3,1]):
+                if sx in [0,0.0]:
+                    sxround = ''
+                    decpl = len(str(x)) - 2
+                else:
+                    sxround =  '(' + str(round_to_n(sx,1))[-1] + ')'
+                    decpl = dp(sx)
+                xround = str(round(x,decpl))
+                if len(xround)-2 < dp(sx):
+                    xround += '0'*(dp(sx) - len(xround) + 2)
+
+                st +=  ' & ' + xround+ sxround
+
+            print(st  + r'\\')
 
 
 # define function to turn hkl arrays into printable strings
