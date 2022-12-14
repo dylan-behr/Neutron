@@ -189,12 +189,13 @@ class Phase_sum():
     Object hosting unit cell and atomic parameters extracted from sum file using extract_sum() function
     '''
     # lattice and atoms 
-    def __init__(self, path_to_file, phase = 1, lattice = True, atom = False, magnet = False, spher = False):
-        self.lattice = self.extract_sum(path_to_file, phase, lattice = True, atom = False)[0]
+    def __init__(self, path_to_file, phase_n = 1, phase_m = 2, lattice = True, atom = False, magnet = False, spher = False):
+        if lattice:
+            self.lattice = self.extract_sum(path_to_file, phase_n, lattice = True, atom = False)[0]
         if atom:
-            self.atoms = self.extract_sum(path_to_file, phase, lattice = False, atom = True)[0]
+            self.atoms = self.extract_sum(path_to_file, phase_n, lattice = False, atom = True)[0]
         if magnet:
-            self.moments = self.extract_sum(path_to_file, phase, lattice = False, atom = False, magnet = True, spher = spher)[0]
+            self.moments = self.extract_sum(path_to_file, phase_m, lattice = False, atom = False, magnet = True, spher = spher)[0]
 
     def extract_sum(self, path_to_file, phase, lattice = True, atom = False, magnet = False, spher = False):
         '''
