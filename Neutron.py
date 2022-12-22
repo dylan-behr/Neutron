@@ -191,11 +191,16 @@ class Phase_sum():
     # lattice and atoms 
     def __init__(self, path_to_file, phase_n = 1, phase_m = 2, lattice = True, atom = False, magnet = False, spher = False):
         if lattice:
-            self.lattice = self.extract_sum(path_to_file, phase_n, lattice = True, atom = False)[0]
+            self.lattice = self.extract_sum(path_to_file, phase_n, lattice = True, atom = False)['lattice']
         if atom:
-            self.atoms = self.extract_sum(path_to_file, phase_n, lattice = False, atom = True)[0]
+            nphase = self.extract_sum(path_to_file, phase_n, lattice = False, atom = True)
+            self.atoms = nphase['atoms']
+            self.rbragg = nphase['rbragg']
+
         if magnet:
-            self.moments = self.extract_sum(path_to_file, phase_m, lattice = False, atom = False, magnet = True, spher = spher)[0]
+            mphase = self.extract_sum(path_to_file, phase_m, lattice = False, atom = False, magnet = True, spher = spher)
+            self.moments = mphase['moments']
+            self.rmag = mphase['rmag']
 
     def extract_sum(self, path_to_file, phase, lattice = True, atom = False, magnet = False, spher = False):
         '''
@@ -208,7 +213,7 @@ class Phase_sum():
             latts (,ats): Lattice parameters (, and optionally frac. coords. + Other atom params) + uncertainties as row entries in 2D array; np.ndarray
         '''
         # Open .sum file
-        results = []
+        results = {}
         with open(path_to_file, 'r') as data:
             lines = data.readlines()
             # Find key indices
@@ -239,7 +244,38 @@ class Phase_sum():
                     # assign dictionary entry for atom to 2D array of params and uncertainties
                     ats[atname] = np.vstack((xyz, sxyz)).T
             
-                results.append(ats)
+                results['atoms']= ats
+
+                # Find key indices for extraction of R_Bragg factors
+                rfindex = find_index(lines, 'BRAGG R-Factors and weight fractions for Pattern #  1', len(lines)-200)
+                rfinds= [rfindex]
+                more_pats = True
+                while more_pats:
+                    try:
+                        rfindex = find_index(lines, 'BRAGG R-Factors and weight fractions for Pattern #  ', rfindex+1)
+                        rfinds.append(rfindex)
+                    except:
+                        more_pats = False
+
+                if len(rfinds)>1:
+                    rflength = rfinds[1] - rfinds[0]
+                else:
+                    rflength = len(lines) - rfinds[0]
+                
+                # extract rbraggs for each pattern using regex matching
+                rbraggs = []
+                
+                for rfindex in rfinds:
+                    endrfindex = rfindex + rflength - 1
+                    rbindex = find_index(lines, '=> Phase:  ' + str(phase), rfindex, endrfindex) + 1
+                    rbline = lines[rbindex]
+                    rbpattern = re.compile(r'=> Bragg R-factor:  \s+\d+\.\d+')
+                    [rbragg] = [rbmatch.group(0).split()[-1] for rbmatch in rbpattern.finditer(rbline)]
+                    rbraggs.append(float(rbragg))
+
+                results['rbragg']= np.array(rbraggs)
+
+
 
             if magnet:
                 # Find key indices for extraction of atomic params
@@ -262,16 +298,45 @@ class Phase_sum():
                     # assign dictionary entry for atom to 2D array of params and uncertainties
                     mags[magname] = np.vstack((mmm, smmm)).T
 
-                results.append(mags)
+                results['moments'] = mags
+
+                # Find key indices for extraction of R_Bragg factors
+                rfindex = find_index(lines, 'BRAGG R-Factors and weight fractions for Pattern #  1', len(lines)-200)
+                rfinds= [rfindex]
+                more_pats = True
+                while more_pats:
+                    try:
+                        rfindex = find_index(lines, 'BRAGG R-Factors and weight fractions for Pattern #  ', rfindex+1)
+                        rfinds.append(rfindex)
+                    except:
+                        more_pats = False
+
+                if len(rfinds)>1:
+                    rflength = rfinds[1] - rfinds[0]
+                else:
+                    rflength = len(lines) - rfinds[0]
+                
+                # extract rbraggs for each pattern using regex matching
+                rmags = []
+                
+                for rfindex in rfinds:
+                    endrfindex = rfindex + rflength - 1
+                    rmindex = find_index(lines, '=> Phase:  ' + str(phase), rfindex, endrfindex) + 1
+                    rmline = lines[rmindex]
+                    rmpattern = re.compile(r'=> Magnetic R-factor:  \s+\d+\.\d+')
+                    [rmag] = [rmmatch.group(0).split()[-1] for rmmatch in rmpattern.finditer(rmline)]
+                    rmags.append(float(rmag))
+
+                results['rmag']= np.array(rmags)
 
         # Extract lattice params directly from key indices
         if lattice:
             latts = np.loadtxt(path_to_file, skiprows = cellindex+1, max_rows = 6)
 
-            results.insert(0,latts)
+            results['lattice'] = latts
 
 
-        return tuple(results)
+        return results
     
     def a_tabulate(self):
         '''
