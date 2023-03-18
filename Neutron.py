@@ -95,7 +95,11 @@ def extract_prf(path_to_file):
 
 
 class Experiment_prf():
-
+    '''
+    Experiment_prf object with loaded data from .prf file
+    Args:
+        path_to_file : .prf file address 
+    '''
     def __init__(self,path_to_file):
         #Attributes
         spectrumdata, phasedata, [zero, dtt1, dtt2], hkldata = extract_prf(path_to_file)
@@ -400,6 +404,41 @@ def hkl_string(arr):
 def prf_plot(exp, ax, limx = [0,0], limy = [0,0], phases = [], tof = False, scale = 1,  obs = True, calc = True, bias = False, bias_adjust = 0, bias_col = 'b', zero_adjust = 0,
  labelo = None, labelc = None, obs_col = 'r', calc_col = 'k', linewidtho = 0, linewidthc = 1, linestyle = '-', marker = '.', markersize = 5, mfc = 'None', ticks = True, 
  ticksize = 50, tickwidth = 10, tick_adjust = 0, tick_sep = 15, xline = False, xlinewidth = 0.5, hkl = False, hkl_adjust = 0, hkl_size = 10, fill = False, base = 0, alpha = 0.5):
+    '''
+    Plot diffraction patterns and fitting from prf file given Experiment_prf and plt.axis objects
+    Args:
+        exp : Experiment_prf type object loaded in from prf file
+        ax : matplotlib axis on which to plot
+        limx/limy : x/y limits
+        phases : list of phases from prf experiment to plot
+        tof : plot in T.O.F (True) or d-spacing (False)
+        scale : global scale factor of plots
+        obs/calc : plot observed/calculated intensities
+        bias : plot difference between observed and calculated 
+        bias_adjust : vertical translation of bias plot
+        bias_col : color of bias plot
+        zero_adjust : vertical translation of obs and calc plots
+        labelo/labelc : label of obs/calc plots
+        obs_col/calc_col : color of obs/calc plots
+        linewidtho/linewidthc : linewidth of obs/calc plots
+        linestyle: linestyle of calc/obs lines
+        marker : marker of obs intensities
+        markersize : markersize of obs markers
+        mfc : marker face colour
+        ticks : Insert tick marks of hkl reflections
+        ticksize: 
+        tickwidth:
+        tick_adjust : vertical translation of tickmarks
+        tick_sep : vertical separation of ticks from different phases
+        xline : Insert vertical lines at hkl reflections
+        xlinewidth : 
+        hkl : insert hkl reflection miller indices to plot
+        hkl_adjust : vertical translation of miller index labels
+        fill : fill in area under obs/calc plots
+        base : bottom limit of filled area
+        alpha : transparency of filling
+
+    '''
     #T.O.F or d-spacing
     if tof:
         x = exp.tof
