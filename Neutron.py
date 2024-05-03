@@ -193,20 +193,21 @@ class Phase_sum():
     Object hosting unit cell and atomic parameters extracted from sum file using extract_sum() function
     '''
     # lattice and atoms 
-    def __init__(self, path_to_file, phase_n = 1, phase_m = 2, lattice = True, atom = False, magnet = False, spher = False):
+    def __init__(self, path_to_file, phase_n = 1, phase_m = 2, lattice = True, atom = False, magnet = False, spher = False, start_pattern=1):
         if lattice:
-            self.lattice = self.extract_sum(path_to_file, phase_n, lattice = True, atom = False)['lattice']
+            self.lattice = self.extract_sum(path_to_file, phase_n, lattice = True, atom = False, start_pattern=start_pattern)['lattice']
         if atom:
-            nphase = self.extract_sum(path_to_file, phase_n, lattice = False, atom = True)
+            nphase = self.extract_sum(path_to_file, phase_n, lattice = False, atom = True, start_pattern=start_pattern)
             self.atoms = nphase['atoms']
             self.rbragg = nphase['rbragg']
 
         if magnet:
-            mphase = self.extract_sum(path_to_file, phase_m, lattice = False, atom = False, magnet = True, spher = spher)
+            mphase = self.extract_sum(path_to_file, phase_m, lattice = False, atom = False, magnet = True, spher = spher, start_pattern=start_pattern)
             self.moments = mphase['moments']
             self.rmag = mphase['rmag']
+            self.kvector = mphase['kvector']
 
-    def extract_sum(self, path_to_file, phase, lattice = True, atom = False, magnet = False, spher = False):
+    def extract_sum(self, path_to_file, phase, lattice = True, atom = False, magnet = False, spher = False, start_pattern = 1):
         '''
         Method to extract lattice parameters and optionally other phase data from .sum file
         Input:
@@ -251,7 +252,7 @@ class Phase_sum():
                 results['atoms']= ats
 
                 # Find key indices for extraction of R_Bragg factors
-                rfindex = find_index(lines, 'BRAGG R-Factors and weight fractions for Pattern #  1', len(lines)-200)
+                rfindex = find_index(lines, f'BRAGG R-Factors and weight fractions for Pattern #  {start_pattern}', len(lines)-200)
                 rfinds= [rfindex]
                 more_pats = True
                 while more_pats:
@@ -283,15 +284,21 @@ class Phase_sum():
 
             if magnet:
                 # Find key indices for extraction of atomic params
-                magindex = find_index(lines, '  Name      Mom     sMo     Phi     sPhi     Tet     sTet     MPhas   sMPhas', phaseindex, cellindex)
+                if spher:
+                    magindex = find_index(lines, '  Name      Mom     sMo     Phi     sPhi     Tet     sTet     MPhas   sMPhas', phaseindex, cellindex)
+                else:
+                    magindex = find_index(lines, '  Name     Mx   sMx    My    sMy    Mz    sMz       M    sM     MPhas   sMPhas', phaseindex, cellindex)
                 endmagindex = find_index(lines, ' ==> ', magindex, cellindex) - 1
                 # Make dictionary for distinct atoms 
                 mags = {}
-                for magline, magnameline in zip(lines[magindex + 4 - spher:endmagindex:2],lines[magindex + 3:endmagindex:2]):
+                for magline, magnameline in zip(lines[magindex + 3:endmagindex:1+spher],lines[magindex + 2+spher:endmagindex:1+spher]):
                     # Extract names of atoms and extract atom parameters as string using regular expressions
                     patmagname = re.compile(r'\b[A-Z].*?\b')
                     # patmmm = re.compile(r'\d\.\d\d\d\(.\d\.\d\d\d\)    \d\.\d\d\d\(.\d\.\d\d\d\)    \d\.\d\d\d\(.\d\.\d\d\d\) ')
-                    patmmm = re.compile(r'\-?\d+\.\d\d\d\(.\d\.\d\d\d\)\s+\-?\d+\.\d\d\d\(.\d\.\d\d\d\)\s+\-?\d+\.\d\d\d\(.\d\.\d\d\d')
+                    if spher:
+                        patmmm = re.compile(r'\-?\d+\.\d\d\d\(.\d\.\d\d\d\)\s+\-?\d+\.\d\d\d\(.\d\.\d\d\d\)\s+\-?\d+\.\d\d\d\(.\d\.\d\d\d')
+                    else:
+                        patmmm = re.compile(r'\-?\d+\.\d\d\d\(\s+\d+\)\s+\-?\d+\.\d\d\d\(\s+\d+\)\s+\-?\d+\.\d\d\d\(\s+\d+')
                     [magname] = [magmatch.group(0) for magmatch in patmagname.finditer(magnameline)]
                     [magmmm] = [magmatch.group(0) for magmatch in patmmm.finditer(magline)]
                     # convert atom params to list of floats
@@ -304,8 +311,19 @@ class Phase_sum():
 
                 results['moments'] = mags
 
+                # Extract k-vector
+                kindex = find_index(lines, '=> Propagation vectors', endmagindex, endmagindex + 30) + 2
+                kline = lines[kindex];skline = lines[kindex+1]
+                kpattern = re.compile(r'\s+\d\s+\-?\d+\.\d\d\d\d\d\s+\-?\d+\.\d\d\d\d\d\s+\-?\d+\.\d\d\d\d\d\s+->')
+                skpattern = re.compile(r'\d+\.\d\d\d\d\d\s+\d+\.\d\d\d\d\d\s+\d+\.\d\d\d\d\d')
+                [kstring] = [kmatch.group(0) for kmatch in kpattern.finditer(kline)]
+                [skstring] = [skmatch.group(0) for skmatch in skpattern.finditer(skline)]
+                klist = [float(x) for x in re.split(r'\s+', kstring)[2:5]]
+                sklist = [float(x) for x in re.split(r'\s+', skstring)]
+                results['kvector'] = np.array([klist,sklist])
+
                 # Find key indices for extraction of R_Bragg factors
-                rfindex = find_index(lines, 'BRAGG R-Factors and weight fractions for Pattern #  1', len(lines)-200)
+                rfindex = find_index(lines, f'BRAGG R-Factors and weight fractions for Pattern #  {start_pattern}', len(lines)-200)
                 rfinds= [rfindex]
                 more_pats = True
                 while more_pats:
@@ -540,7 +558,11 @@ def basis_transform(vector, basis):
     return np.matmul(vector,alpha)
 
 #transform frac coords and other params of pcr, printing transformed params in pcr file format and returning dictionary and list of transformed coords and latt. params respectively  
-def pcr_print(path_to_file, phase, trans = [0,0,0], basis = [[1,0,0],[0,1,0],[0,0,1]], to_mag = False, mom_p = [0.0,0.0,0.0], to_str = False, bound = True, zero = False, reset_biso = False, reset_occ = False):
+def pcr_print(
+    path_to_file, phase, trans = [0,0,0], basis = [[1,0,0],[0,1,0],[0,0,1]], to_mag = False, 
+    mom_p = [0.0,0.0,0.0], to_str = False, bound = True, zero = False, reset_biso = False, reset_occ = False,
+    start_pattern = 1
+    ):
 
     #read data lines as list of lists of string
     with open(path_to_file, 'r') as data:
@@ -559,7 +581,7 @@ def pcr_print(path_to_file, phase, trans = [0,0,0], basis = [[1,0,0],[0,1,0],[0,
     else:    
         startatcoord = np.min([lines[phaseindex:endphaseindex].index(x) + phaseindex for x in lines[phaseindex:endphaseindex] if re.search('!Atom   Typ       X        Y        Z     Biso', x)])
         start_col = 2
-    endatcoord = np.min([lines[startatcoord:].index(x) + startatcoord for x in lines[phaseindex:endphaseindex] if re.search('!-------> Profile Parameters for Pattern #   1', x)])
+    endatcoord = np.min([lines[startatcoord:].index(x) + startatcoord for x in lines[phaseindex:endphaseindex] if re.search(f'!-------> Profile Parameters for Pattern #   {start_pattern}', x)])
     latparamindex = np.min([lines[endatcoord:endphaseindex].index(x) + endatcoord for x in lines[endatcoord:endphaseindex] if re.search('!     a          b         c        alpha      beta       gamma      #Cell Info', x)]) + 1
     # lattice parameters extracted
     latparams = [float(x) for x in separate_nums(lines[latparamindex])]
